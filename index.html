@@ -573,10 +573,8 @@
   </style>
 </head>
 <body>
-  <audio id="bgmusic" loop>
-    <!-- Add your track: put music.mp3 in same folder as this file, or change src -->
-    <source src="music.mp3" type="audio/mpeg">
-    <source src="music.ogg" type="audio/ogg">
+  <audio id="bgmusic" loop preload="auto">
+    <source src="https://r2.guns.lol/7fdd2ffd-dcaa-41d0-93b1.mp3-5e4bc914206d" type="audio/mpeg">
   </audio>
 
   <div class="page">
@@ -656,7 +654,7 @@
 
     const modCategories = [
       { title: 'Stream', commands: [
-        ['!ad [30|60|90|120|150|180]', 'Start a commercial', '!ad 60'],
+        ['!ad [30|60|90|120|150|180]', 'Start a commercial (streamer token)', '!ad 60'],
       ]},
       { title: 'Custom commands', commands: [
         ['!addcom !name response', 'Add custom command. Use $(url:https://...) for API.', '!addcom !discord Join https://discord.gg/Jg7FGGhmSH'],
@@ -718,7 +716,16 @@
     const playBtn = document.getElementById('playbtn');
     const volSlider = document.getElementById('vol');
 
-    playBtn.addEventListener('click', () => {
+    // Autoplay when user clicks anywhere (browsers require user gesture for audio)
+    function startOnFirstClick() {
+      audio.play().catch(() => {});
+      playBtn.classList.remove('paused');
+    }
+    document.addEventListener('click', startOnFirstClick, { once: true });
+    document.addEventListener('keydown', startOnFirstClick, { once: true });
+
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (audio.paused) {
         audio.play().catch(() => {});
         playBtn.classList.remove('paused');
