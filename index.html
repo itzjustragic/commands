@@ -573,9 +573,7 @@
   </style>
 </head>
 <body>
-  <audio id="bgmusic" loop preload="auto">
-    <source src="https://r2.guns.lol/7fdd2ffd-dcaa-41d0-93b1.mp3-5e4bc914206d" type="audio/mpeg">
-  </audio>
+  <audio id="bgmusic" preload="auto" playsinline loop></audio>
 
   <div class="page">
     <header>
@@ -711,24 +709,97 @@
     renderCategories('commands-everyone', everyoneCategories);
     renderCategories('commands-mod', modCategories);
 
-    // Background music + volume
+    // Background music + volume (same approach as tr.html: load source via JS, play on gesture)
     const audio = document.getElementById('bgmusic');
     const playBtn = document.getElementById('playbtn');
     const volSlider = document.getElementById('vol');
 
-    // Autoplay when user clicks anywhere (browsers require user gesture for audio)
-    function startOnFirstClick() {
-      audio.play().catch(() => {});
-      playBtn.classList.remove('paused');
+    const CANDIDATES = [
+      { url: 'https://r2.guns.lol/7fdd2ffd-dcaa-41d0-93b1-5e4bc914206d.mp3', type: 'audio/mpeg' },
+      { url: 'https://r2.guns.lol/97f40c6a-2261-4e77-8961-927cb56957e5.mp3', type: 'audio/mpeg' },
+    ];
+
+    function setAudioSrc(url) {
+      const old = audio.querySelectorAll('source');
+      old.forEach(s => s.remove());
+      audio.src = url;
+      try { audio.load(); } catch (e) { console.warn('audio.load() threw', e); }
     }
-    document.addEventListener('click', startOnFirstClick, { once: true });
-    document.addEventListener('keydown', startOnFirstClick, { once: true });
+
+    function mimeSupported(mime) {
+      try {
+        const r = audio.canPlayType(mime);
+        return r === 'probably' || r === 'maybe';
+      } catch (e) { return false; }
+    }
+
+    async function findAndLoadSources() {
+      const loaded = [];
+      for (const c of CANDIDATES) {
+        if (!c || !c.url) continue;
+        if (!mimeSupported(c.type)) continue;
+        let ok = true;
+        try {
+          const res = await fetch(c.url, { method: 'HEAD', cache: 'no-cache' });
+          if (!res.ok) ok = false;
+        } catch (err) {}
+        if (!ok) continue;
+        loaded.push(c.url);
+      }
+      return loaded;
+    }
+
+    let audioLoaded = false;
+    async function playFromUserGesture() {
+      if (audioLoaded && audio.src) {
+        try {
+          await audio.play();
+          playBtn.classList.remove('paused');
+          return true;
+        } catch (e) { return false; }
+      }
+      try {
+        const chosen = await findAndLoadSources();
+        if (!chosen || chosen.length === 0) return false;
+        setAudioSrc(chosen[0]);
+        audioLoaded = true;
+        await audio.play();
+        playBtn.classList.remove('paused');
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    let audioUnlocked = false;
+    function unlockAudioOnGesture() {
+      if (audioUnlocked) return;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) { audioUnlocked = true; return; }
+        const ctx = new AC();
+        if (ctx.state === 'suspended') ctx.resume();
+        const b = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = b;
+        src.connect(ctx.destination);
+        src.start(0);
+        audioUnlocked = true;
+      } catch (e) { audioUnlocked = true; }
+    }
+    document.body.addEventListener('pointerdown', unlockAudioOnGesture, { once: true, passive: true });
+
+    document.addEventListener('click', function startOnFirstClick() {
+      if (audio.paused) playFromUserGesture().then(() => {});
+    }, { once: true });
+    document.addEventListener('keydown', function startOnFirstClickK() {
+      if (audio.paused) playFromUserGesture().then(() => {});
+    }, { once: true });
 
     playBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (audio.paused) {
-        audio.play().catch(() => {});
-        playBtn.classList.remove('paused');
+        playFromUserGesture().then(() => {});
       } else {
         audio.pause();
         playBtn.classList.add('paused');
